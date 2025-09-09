@@ -46,23 +46,29 @@ fetcher.processDirectory('/path/to/music')
 
 ## Advanced Usage
 
-### With Progress Reporting
+### With Custom Options
 
 ```typescript
 import { createLyricsFetcher } from 'lrclib-fetcher-ts';
 
 const fetcher = createLyricsFetcher({
-  recursive: true,
-  skipExisting: true,
-  overrideExisting: false,
-  batchSize: 5,
-  delayBetweenRequests: 1000,
-  onProgress: (current, total, result) => {
-    if (result) {
-      console.log(`[${current}/${total}] ${result.metadata.artist} - ${result.metadata.title}: ${result.success ? 'Success' : 'Failed'}`);
-    } else {
-      console.log(`Progress: ${current}/${total} files processed`);
-    }
+  logging: {
+    level: 'debug',
+    logToFile: true,
+    logFilePath: 'lyrics-fetcher.log'
+  },
+  search: {
+    allowTitleOnlySearch: true,
+    preferSynced: true
+  },
+  file: {
+    skipExisting: true,
+    overwriteExisting: false
+  },
+  batch: {
+    enabled: true,
+    size: 5,
+    delayMs: 1000
   }
 });
 
@@ -79,7 +85,9 @@ const orchestrator = new LyricsFetcherOrchestrator();
 
 // Process a single file
 const result = await orchestrator.processAudioFile('/path/to/music/song.mp3', {
-  overrideExisting: true
+  file: {
+    overwriteExisting: true
+  }
 });
 
 if (result.success) {
@@ -97,15 +105,43 @@ Creates a new lyrics fetcher instance with the specified options.
 
 #### Options
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `recursive` | boolean | `true` | Whether to scan subdirectories recursively |
-| `skipExisting` | boolean | `true` | Skip files that already have lyrics files |
-| `extensions` | string[] | `['mp3', 'flac', 'm4a', 'ogg', 'wav', 'wma']` | File extensions to process |
-| `overrideExisting` | boolean | `false` | Replace existing lyrics files |
-| `batchSize` | number | `10` | Number of files to process in parallel |
-| `delayBetweenRequests` | number | `1000` | Milliseconds between API requests |
-| `onProgress` | function | `undefined` | Progress callback function |
+The options object has the following structure:
+
+```typescript
+{
+  logging: {
+    level: 'debug' | 'info' | 'warn' | 'error';
+    logToFile?: boolean;
+    logFilePath?: string;
+  },
+  search: {
+    allowTitleOnlySearch: boolean;
+    preferSynced: boolean;
+  },
+  file: {
+    skipExisting: boolean;
+    overwriteExisting: boolean;
+  },
+  batch: {
+    enabled: boolean;
+    size: number;
+    delayMs: number;
+  }
+}
+```
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `logging.level` | string | Log level: 'debug', 'info', 'warn', or 'error' |
+| `logging.logToFile` | boolean | Whether to write logs to a file |
+| `logging.logFilePath` | string | Path to the log file if logging to file |
+| `search.allowTitleOnlySearch` | boolean | Allow searching by title only if artist search fails |
+| `search.preferSynced` | boolean | Prefer synchronized lyrics over plain text |
+| `file.skipExisting` | boolean | Skip files that already have lyrics files |
+| `file.overwriteExisting` | boolean | Replace existing lyrics files |
+| `batch.enabled` | boolean | Enable batch processing |
+| `batch.size` | number | Number of files to process in parallel |
+| `batch.delayMs` | number | Milliseconds between API requests |
 
 ### `LyricsFetcherOrchestrator`
 
@@ -139,7 +175,44 @@ import { extractMetadata } from 'lrclib-fetcher-ts';
 
 const metadata = await extractMetadata('/path/to/music/song.mp3');
 console.log(metadata);
-// { artist: 'Artist Name', title: 'Song Title', album: 'Album Name', duration: 240 }
+// { artist: 'Artist Name', title: 'Song Title', album: 'Album Name', duration: 240, filepath: '/path/to/music/song.mp3' }
+```
+
+### Lyrics API Client
+
+The API client can be used directly to search for lyrics:
+
+```typescript
+import { LrcLibClient } from 'lrclib-fetcher-ts';
+
+const client = new LrcLibClient();
+const lyrics = await client.searchLyrics({
+  artist: 'Artist Name',
+  title: 'Song Title',
+  album: 'Album Name',
+  duration: 240,
+  filepath: '/path/to/file.mp3'
+});
+
+if (lyrics && lyrics.syncedLyrics) {
+  console.log('Found synchronized lyrics!');
+}
+```
+
+### File Writer
+
+```typescript
+import { LyricsFileWriter } from 'lrclib-fetcher-ts';
+
+const writer = new LyricsFileWriter();
+const lyricsPath = await writer.writeLyrics('/path/to/audio.mp3', {
+  artist: 'Artist Name',
+  title: 'Song Title',
+  syncedLyrics: '[00:01.00]Lyrics line 1\n[00:05.00]Lyrics line 2',
+  plainLyrics: 'Lyrics line 1\nLyrics line 2',
+  source: 'lrclib.net',
+  instrumental: false
+});
 ```
 
 ## Project Structure
@@ -153,6 +226,7 @@ lrclib-fetcher-ts/
 │   ├── api/             # LrcLib API client
 │   ├── writer/          # Lyrics file writer
 │   ├── orchestrator/    # Main orchestrator
+│   ├── utils/           # Utilities (logging, error handling)
 │   └── index.ts         # Entry point
 ├── docs/
 │   └── lrclib-api.md    # LrcLib API documentation
@@ -161,6 +235,13 @@ lrclib-fetcher-ts/
 ```
 
 ## Error Handling
+
+The library includes custom error classes for different types of failures:
+
+- `LrcLibError`: Base error class
+- `MetadataExtractionError`: Issues extracting metadata
+- `LyricsFetchError`: Issues fetching lyrics from the API
+- `FileWriteError`: Issues writing lyrics to files
 
 All errors are captured and included in the result objects, allowing the process to continue even when individual files fail. The result objects include:
 

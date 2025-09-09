@@ -5,25 +5,57 @@ export interface LoggingOptions {
   outputToFile?: string;
 }
 
-export interface OrchestratorOptions extends ScanOptions, FetchOptions {
-  onProgress?: (current: number, total: number, result?: ProcessResult) => void;
-  logging?: LoggingOptions;
+// export interface OrchestratorOptions extends ScanOptions, FetchOptions {
+//   onProgress?: (current: number, total: number, result?: ProcessResult) => void;
+//   logging?: LoggingOptions;
+// }
+
+/**
+ * Options for the lyrics fetcher orchestrator
+ */
+export interface OrchestratorOptions {
+  logging: {
+    level: 'debug' | 'info' | 'warn' | 'error';
+    logToFile?: boolean;
+    logFilePath?: string;
+  };
+  search: {
+    allowTitleOnlySearch: boolean;
+    preferSynced: boolean;
+  };
+  file: {
+    skipExisting: boolean;
+    overwriteExisting: boolean;
+  };
+  batch: {
+    enabled: boolean;
+    size: number;
+    delayMs: number;
+  };
 }
 
+/**
+ * Track metadata extracted from audio files
+ */
 export interface TrackMetadata {
   artist: string;
   title: string;
   album?: string;
   duration?: number;
-  year?: string;
-  track?: string | number;
+  filepath: string;
 }
 
+/**
+ * Result from a lyrics search
+ */
 export interface LyricResult {
-  syncedLyrics?: string;  // LRC format with timestamps
-  plainLyrics?: string;   // Text without timestamps
+  artist: string;
+  title: string;
+  album?: string;
+  syncedLyrics: string | null;
+  plainLyrics: string | null;
+  source: string;
   instrumental: boolean;
-  language?: string;
 }
 
 export interface ProcessResult {
@@ -46,14 +78,23 @@ export interface FetchOptions {
   delayBetweenRequests: number;
 }
 
-// export interface LoggingOptions {
-//   level?: 'error' | 'warn' | 'info' | 'debug' | 'trace';
-//   useColors?: boolean;
-//   includeTimestamps?: boolean;
-//   outputToFile?: string;
-// }
+/**
+ * Options for lyrics search
+ */
+export interface LyricSearchOptions {
+  allowTitleOnlySearch?: boolean;
+  preferSynced?: boolean;
+}
 
-// export interface OrchestratorOptions extends ScanOptions, FetchOptions {
-//   onProgress?: (current: number, total: number, result?: ProcessResult) => void;
-//   logging?: LoggingOptions;  // Add this line
-// }
+
+/**
+ * Processing result for a single file
+ */
+export interface FileProcessResult {
+  filepath: string;
+  success: boolean;
+  metadata?: TrackMetadata;
+  lyrics?: LyricResult;
+  lyricsPath?: string;
+  error?: string;
+}
