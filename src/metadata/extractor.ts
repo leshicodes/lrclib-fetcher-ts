@@ -4,6 +4,7 @@ import util from 'util';
 import ffprobe from 'ffprobe';
 import ffprobeStatic from 'ffprobe-static';
 import { TrackMetadata } from '../types/index';
+import { logger } from '../utils/logger';
 
 const execPromise = util.promisify(exec);
 
@@ -19,9 +20,9 @@ export async function extractMetadata(filePath: string): Promise<TrackMetadata> 
     
     const data = JSON.parse(stdout);
     const tags = data.format.tags || {};
-    
-    console.log("Available tags:", JSON.stringify(tags, null, 2));
-    
+
+    logger.debug('MetadataExtractor', "Available tags:", JSON.stringify(tags, null, 2));
+
     // Extract metadata prioritizing proper tag names
     const metadata: TrackMetadata = {
       // Artist priority: album_artist > artist > performer

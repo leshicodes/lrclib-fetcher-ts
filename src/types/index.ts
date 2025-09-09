@@ -1,3 +1,15 @@
+export interface LoggingOptions {
+  level?: 'error' | 'warn' | 'info' | 'debug' | 'trace';
+  useColors?: boolean;
+  includeTimestamps?: boolean;
+  outputToFile?: string;
+}
+
+export interface OrchestratorOptions extends ScanOptions, FetchOptions {
+  onProgress?: (current: number, total: number, result?: ProcessResult) => void;
+  logging?: LoggingOptions;
+}
+
 export interface TrackMetadata {
   artist: string;
   title: string;
@@ -33,3 +45,15 @@ export interface FetchOptions {
   batchSize: number;
   delayBetweenRequests: number;
 }
+
+// export interface LoggingOptions {
+//   level?: 'error' | 'warn' | 'info' | 'debug' | 'trace';
+//   useColors?: boolean;
+//   includeTimestamps?: boolean;
+//   outputToFile?: string;
+// }
+
+// export interface OrchestratorOptions extends ScanOptions, FetchOptions {
+//   onProgress?: (current: number, total: number, result?: ProcessResult) => void;
+//   logging?: LoggingOptions;  // Add this line
+// }
