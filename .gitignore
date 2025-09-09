@@ -2,3 +2,4 @@ music/*
 tests/music/*
 node_modules
 .github/
+dist/

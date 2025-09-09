@@ -3,15 +3,12 @@ import { scanDirectory } from '../scanner/fileScanner';
 import { extractMetadata } from '../metadata/extractor';
 import { LrcLibClient } from '../api/lrclib';
 import { LyricsFileWriter } from '../writer/fileWriter';
-import { 
-  ScanOptions, 
-  FetchOptions, 
-  ProcessResult, 
+import {
+  ProcessResult,
   TrackMetadata,
-  LoggingOptions,
-  OrchestratorOptions
+  OrchestratorOptions,
+  ScanOptions
 } from '../types';
-
 /**
  * Main orchestrator for the lyrics fetching process
  */
@@ -30,53 +27,77 @@ export class LyricsFetcherOrchestrator {
     }
   }
 
+
   constructor(options: Partial<OrchestratorOptions> = {}) {
     // Configure logger if options provided
     if (options.logging) {
       Logger.configure({
         level: this.mapLogLevel(options.logging.level),
-        useColors: options.logging.useColors,
-        includeTimestamps: options.logging.includeTimestamps,
-        outputToFile: options.logging.outputToFile
+        useColors: true, // Default values if not provided
+        includeTimestamps: true, // Default values if not provided
+        outputToFile: options.logging.logFilePath
       });
     }
 
-    this.lrcLibClient = new LrcLibClient(options.delayBetweenRequests);
+    this.lrcLibClient = new LrcLibClient();
     this.fileWriter = new LyricsFileWriter();
 
     logger.info('Orchestrator', 'Initialized LyricsFetcherOrchestrator');
   }
-
   /**
-   * Process a directory of audio files to fetch lyrics
-   */
+ * Process a directory of audio files to fetch lyrics
+ */
   async processDirectory(
     directory: string,
     options: Partial<OrchestratorOptions> = {}
   ): Promise<ProcessResult[]> {
-    // Default options
-    const fullOptions: OrchestratorOptions = {
-      recursive: true,
-      skipExisting: true,
-      extensions: ['mp3', 'flac', 'm4a', 'ogg', 'wav', 'wma'],
-      overrideExisting: false,
-      batchSize: 10,
-      delayBetweenRequests: 1000,
-      onProgress: undefined,
-      ...options
+    // Set default options with proper structure
+    const defaultOptions: OrchestratorOptions = {
+      logging: {
+        level: 'info'
+      },
+      search: {
+        allowTitleOnlySearch: false,
+        preferSynced: true
+      },
+      file: {
+        skipExisting: true,
+        overwriteExisting: false
+      },
+      batch: {
+        enabled: true,
+        size: 10,
+        delayMs: 1000
+      }
+    };
+
+    // Merge options with defaults
+    const mergedOptions: OrchestratorOptions = {
+      logging: { ...defaultOptions.logging, ...options.logging },
+      search: { ...defaultOptions.search, ...options.search },
+      file: { ...defaultOptions.file, ...options.file },
+      batch: { ...defaultOptions.batch, ...options.batch },
+      onProgress: options.onProgress
+    };
+
+    // Convert to scan options format
+    const scanOptions: ScanOptions = {
+      recursive: true, // Default to true if not specified
+      skipExisting: mergedOptions.file.skipExisting,
+      extensions: ['mp3', 'flac', 'm4a', 'ogg', 'wav', 'wma']
     };
 
     // 1. Scan directory for audio files
-    const audioFiles = await scanDirectory(directory, fullOptions);
+    const audioFiles = await scanDirectory(directory, scanOptions);
 
     // 2. Process files in batches
     const results: ProcessResult[] = [];
     let processed = 0;
 
     // Process in batches to avoid overwhelming the API
-    for (let i = 0; i < audioFiles.length; i += fullOptions.batchSize) {
-      const batch = audioFiles.slice(i, i + fullOptions.batchSize);
-      const batchPromises = batch.map(filePath => this.processAudioFile(filePath, fullOptions));
+    for (let i = 0; i < audioFiles.length; i += mergedOptions.batch.size) {
+      const batch = audioFiles.slice(i, i + mergedOptions.batch.size);
+      const batchPromises = batch.map(filePath => this.processAudioFile(filePath, mergedOptions));
       const batchResults = await Promise.all(batchPromises);
 
       results.push(...batchResults);
@@ -84,8 +105,8 @@ export class LyricsFetcherOrchestrator {
       processed += batch.length;
 
       // Report progress if callback is provided
-      if (fullOptions.onProgress) {
-        fullOptions.onProgress(processed, audioFiles.length);
+      if (mergedOptions.onProgress) {
+        mergedOptions.onProgress(processed, audioFiles.length);
       }
     }
 
@@ -101,10 +122,10 @@ export class LyricsFetcherOrchestrator {
   ): Promise<ProcessResult> {
     try {
       // Check if we should skip this file
-      if (options.skipExisting && !options.overrideExisting && this.fileWriter.lyricsFileExists(filePath)) {
+      if (options.file.skipExisting && !options.file.overwriteExisting && this.fileWriter.lyricsFileExists(filePath)) {
         return {
           filePath,
-          metadata: { artist: '', title: '' }, // We don't extract metadata for skipped files
+          metadata: { artist: '', title: '', filepath: filePath }, // We don't extract metadata for skipped files
           success: true,
           lyricPath: undefined // No new file was created
         };
@@ -113,13 +134,21 @@ export class LyricsFetcherOrchestrator {
       // Extract metadata
       const metadata = await extractMetadata(filePath);
 
+      // Check if we have metadata at all
+      if (!metadata) {
+        throw new Error('Failed to extract metadata');
+      }
+
       // Check if we have enough metadata
       if (!metadata.artist || !metadata.title) {
         throw new Error('Insufficient metadata to search for lyrics');
       }
 
       // Search for lyrics
-      const lyrics = await this.lrcLibClient.searchLyrics(metadata);
+      const lyrics = await this.lrcLibClient.searchLyrics(metadata, {
+        allowTitleOnlySearch: options.search.allowTitleOnlySearch,
+        preferSynced: options.search.preferSynced
+      });
 
       if (!lyrics) {
         return {
@@ -130,8 +159,8 @@ export class LyricsFetcherOrchestrator {
         };
       }
 
-      // Delete existing lyrics if override mode is enabled
-      if (options.overrideExisting) {
+      // Delete existing lyrics if overwrite mode is enabled
+      if (options.file.overwriteExisting) {
         await this.fileWriter.deleteExistingLyrics(filePath);
       }
 
@@ -157,14 +186,17 @@ export class LyricsFetcherOrchestrator {
     } catch (error) {
       const result: ProcessResult = {
         filePath,
-        metadata: { artist: '', title: '' } as TrackMetadata,
+        metadata: { artist: '', title: '', filepath: filePath } as TrackMetadata,
         success: false,
         error: error as Error
       };
 
       // Try to get metadata even if processing failed
       try {
-        result.metadata = await extractMetadata(filePath);
+        const metadata = await extractMetadata(filePath);
+        if (metadata) {
+          result.metadata = metadata;
+        }
       } catch {
         // Keep default metadata if extraction fails
       }
