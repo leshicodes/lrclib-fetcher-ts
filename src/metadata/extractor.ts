@@ -47,7 +47,7 @@ export class MetadataExtractor {
 
       const data = JSON.parse(stdout);
 
-      logger.debug('MetadataExtractor', `Raw ffprobe output: ${JSON.stringify(data, null, 2)}`);
+      // logger.debug('MetadataExtractor', `Raw ffprobe output: ${JSON.stringify(data, null, 2)}`);
 
       // Verify this is actually an audio file by checking for audio streams
       const hasAudioStream = data.streams && data.streams.some(stream => stream.codec_type === 'audio');
@@ -231,7 +231,7 @@ export class MetadataExtractor {
 
     if (metadata.title.toLowerCase().includes('cover.jpg')) {
       logger.warn('MetadataExtractor', `WARNING: Title contains "cover.jpg" for file: ${filePath}`);
-      logger.debug('MetadataExtractor', `Raw ffprobe data: ${JSON.stringify(metadata)}`);
+      // logger.debug('MetadataExtractor', `Raw ffprobe data: ${JSON.stringify(metadata)}`);
     }
 
     // Make sure we're not accidentally picking up "cover.jpg" anywhere
