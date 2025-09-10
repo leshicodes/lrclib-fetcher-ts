@@ -1,6 +1,6 @@
 {
   "name": "lrclib-fetcher-ts",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "description": "Library for fetching synchronized lyrics for music files",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

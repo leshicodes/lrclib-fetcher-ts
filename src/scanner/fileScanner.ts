@@ -1,38 +1,39 @@
 import fs from 'fs';
 import path from 'path';
 import { ScanOptions } from '../types';
+import { logger } from '../utils/logger';
+// Make sure this is defined and matches the one in metadata extractor
+const AUDIO_EXTENSIONS = ['.mp3', '.flac', '.m4a', '.ogg', '.wav', '.wma'];
 
-export async function scanDirectory(
-    directory: string,
-    options: ScanOptions
-): Promise<string[]> {
-    const results: string[] = [];
-
-    const dirEntries = await fs.promises.readdir(directory, { withFileTypes: true });
-
-    for (const entry of dirEntries) {
-        const fullPath = path.join(directory, entry.name);
-
-        if (entry.isDirectory() && options.recursive) {
-            const subResults = await scanDirectory(fullPath, options);
-            results.push(...subResults);
-        } else if (entry.isFile()) {
-            const ext = path.extname(entry.name).toLowerCase().substring(1);
-
-            if (options.extensions.includes(ext)) {
-                if (options.skipExisting) {
-                    const lrcPath = fullPath.replace(new RegExp(`\\.${ext}$`), '.lrc');
-                    const txtPath = fullPath.replace(new RegExp(`\\.${ext}$`), '.txt');
-
-                    if (fs.existsSync(lrcPath) || fs.existsSync(txtPath)) {
-                        continue;
-                    }
-                }
-
-                results.push(fullPath);
-            }
+export async function scanDirectory(dirPath: string, options: ScanOptions): Promise<string[]> {
+  const { recursive = true } = options;
+  const results: string[] = [];
+  
+  try {
+    const files = await fs.promises.readdir(dirPath);
+    
+    for (const file of files) {
+      const filePath = path.join(dirPath, file);
+      const stat = await fs.promises.stat(filePath);
+      
+      if (stat.isDirectory()) {
+        if (recursive) {
+          const nestedFiles = await scanDirectory(filePath, options);
+          results.push(...nestedFiles);
         }
+      } else {
+        // Only include audio files in the results
+        const ext = path.extname(file).toLowerCase();
+        if (AUDIO_EXTENSIONS.includes(ext)) {
+          results.push(filePath);
+        } else {
+          logger.debug('FileScanner', `Skipping non-audio file: ${file}`);
+        }
+      }
     }
-
-    return results;
+  } catch (error) {
+    logger.error('FileScanner', `Error scanning directory ${dirPath}: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  
+  return results;
 }

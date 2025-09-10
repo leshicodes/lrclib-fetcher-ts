@@ -9,6 +9,7 @@ import {
   OrchestratorOptions,
   ScanOptions
 } from '../types';
+import {MetadataExtractionError} from "../utils/errorHandling";
 /**
  * Main orchestrator for the lyrics fetching process
  */
@@ -133,6 +134,10 @@ export class LyricsFetcherOrchestrator {
 
       // Extract metadata
       const metadata = await extractMetadata(filePath);
+      if (!metadata) {
+        logger.debug('Orchestrator', `Skipping file with no metadata: ${filePath}`);
+        throw new MetadataExtractionError(filePath, "skipped file with no metadata");
+      }
 
       // Check if we have metadata at all
       if (!metadata) {
