@@ -1,18 +1,25 @@
 {
   "name": "lrclib-fetcher-ts",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "description": "Library for fetching synchronized lyrics for music files",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "bin": {
+    "lrclib": "dist/cli.js"
+  },
   "scripts": {
     "test": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' tests/test.index.ts",
-    "build": "tsc"
+    "build": "tsc",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
     "@types/node": "^24.3.1",
     "axios": "^1.11.0",
+    "chalk": "^4.1.2",
+    "commander": "^14.0.0",
     "ffprobe": "^1.1.2",
     "ffprobe-static": "^3.1.0",
+    "ora": "^5.4.1",
     "typescript": "^5.9.2"
   },
   "devDependencies": {

@@ -32,6 +32,7 @@ export interface OrchestratorOptions {
     size: number;
     delayMs: number;
   };
+  onProgress?: (current: number, total: number, result?: ProcessResult) => void;
 }
 
 /**

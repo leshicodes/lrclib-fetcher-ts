@@ -1,10 +1,14 @@
 import ffprobe from 'ffprobe';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
 import ffprobeStatic from 'ffprobe-static';
 import path from 'path';
 import { logger } from '../utils/logger';
 import { TrackMetadata } from '../types';
 import { MetadataExtractionError } from '../utils/errorHandling';
 
+// Audio file extensions - add this constant
+const AUDIO_EXTENSIONS = ['.mp3', '.flac', '.m4a', '.ogg', '.wav', '.wma'];
 
 // Tag name constants to avoid magic strings
 const TAG_NAMES = {
@@ -14,15 +18,43 @@ const TAG_NAMES = {
   DURATION: ['duration', 'DURATION', 'Duration', 'length', 'LENGTH', 'Length'],
 };
 
+
+const execFileAsync = promisify(execFile);
+
 export class MetadataExtractor {
   /**
    * Extract metadata from an audio file
    */
   async extractMetadata(filePath: string): Promise<TrackMetadata | null> {
     try {
+      // Add extension check - reject non-audio files
+      const ext = path.extname(filePath).toLowerCase();
+      if (!AUDIO_EXTENSIONS.includes(ext)) {
+        logger.debug('MetadataExtractor', `Skipping non-audio file: ${path.basename(filePath)}`);
+        throw new MetadataExtractionError(filePath, 'not an audio file');
+      }
+
       logger.debug('MetadataExtractor', `Extracting metadata from: ${path.basename(filePath)}`);
 
-      const data = await ffprobe(filePath, { path: ffprobeStatic.path });
+      // Run ffprobe directly using child_process
+      const { stdout } = await execFileAsync(ffprobeStatic.path, [
+        '-v', 'quiet',
+        '-print_format', 'json',
+        '-show_format',
+        '-show_streams',
+        filePath
+      ]);
+
+      const data = JSON.parse(stdout);
+
+      // logger.debug('MetadataExtractor', `Raw ffprobe output: ${JSON.stringify(data, null, 2)}`);
+
+      // Verify this is actually an audio file by checking for audio streams
+      const hasAudioStream = data.streams && data.streams.some(stream => stream.codec_type === 'audio');
+      if (!hasAudioStream) {
+        logger.debug('MetadataExtractor', `No audio stream found in file: ${path.basename(filePath)}`);
+        throw new MetadataExtractionError(filePath, 'no audio stream found');
+      }
 
       // Extract the basic information
       const basicInfo = this.extractBasicInfo(data, filePath);
@@ -37,6 +69,7 @@ export class MetadataExtractor {
       return metadata;
     } catch (error) {
       logger.error('MetadataExtractor', `Failed to extract metadata from ${filePath}: ${error instanceof Error ? error.message : String(error)}`);
+      // return null; // Return null instead of throwing an error to continue processing other files
       throw new MetadataExtractionError(filePath, error instanceof Error ? error.message : String(error));
     }
   }
@@ -49,19 +82,33 @@ export class MetadataExtractor {
 
     // Get duration from format section
     if (data.format && data.format.duration) {
-      info.duration = Math.round(parseFloat(data.format.duration));
+      info.duration = parseFloat(data.format.duration);
     }
 
     // Fallback to filename if no metadata available
     const filename = path.basename(filePath, path.extname(filePath));
+
+    // DON'T look for cover.jpg in the filename regex
     const filenameMatch = filename.match(/^(?:\d+\s+)?(?:(?<artist>.+?)\s+-\s+)?(?<title>.+?)$/);
 
     if (filenameMatch && filenameMatch.groups) {
-      info.artist = filenameMatch.groups.artist || 'Unknown Artist';
-      info.title = filenameMatch.groups.title || filename;
+      if (filenameMatch.groups.artist) {
+        info.artist = filenameMatch.groups.artist.trim();
+      }
+
+      if (filenameMatch.groups.title) {
+        const title = filenameMatch.groups.title.trim();
+        // Make sure we're not picking up "cover.jpg" here
+        if (!title.toLowerCase().includes('cover.jpg')) {
+          info.title = title;
+        } else {
+          // Just use the raw filename without trying to parse
+          info.title = filename;
+        }
+      }
     } else {
+      // If we can't parse, use the whole filename
       info.title = filename;
-      info.artist = 'Unknown Artist';
     }
 
     return info;
@@ -72,60 +119,86 @@ export class MetadataExtractor {
    */
   private extractTagInfo(data: any): Partial<TrackMetadata> {
     const info: Partial<TrackMetadata> = {};
-    const tags: Record<string, string> = {};
+    const formatTags: Record<string, string> = {};
+    const streamTags: Record<string, string> = {};
 
-    // Collect tags from format and streams
+    // First collect format tags - these should have higher priority
     if (data.format && data.format.tags) {
-      Object.assign(tags, data.format.tags);
+      logger.debug('MetadataExtractor', `Format tags found: ${JSON.stringify(data.format.tags)}`);
+      Object.assign(formatTags, data.format.tags);
     }
 
+    // Then collect audio stream tags as fallback
     if (data.streams) {
       for (const stream of data.streams) {
-        if (stream.tags) {
-          Object.assign(tags, stream.tags);
+        if (stream.codec_type === 'audio' && stream.tags) {
+          logger.debug('MetadataExtractor', `Audio stream tags: ${JSON.stringify(stream.tags)}`);
+          Object.assign(streamTags, stream.tags);
         }
       }
     }
 
-    // Extract artist
-    for (const key of TAG_NAMES.ARTIST) {
-      if (tags[key]) {
-        info.artist = tags[key];
-        break;
-      }
-    }
+    // Debug the collected tags
+    logger.debug('MetadataExtractor', `Format tags: ${JSON.stringify(formatTags)}`);
+    logger.debug('MetadataExtractor', `Stream tags: ${JSON.stringify(streamTags)}`);
 
-    // Extract title
+    // Extract title - try format tags first, then stream tags
     for (const key of TAG_NAMES.TITLE) {
-      if (tags[key]) {
-        info.title = tags[key];
+      if (formatTags[key]) {
+        info.title = formatTags[key];
+        logger.debug('MetadataExtractor', `Found title in format tags: ${info.title}`);
         break;
       }
     }
 
-    // Extract album
-    for (const key of TAG_NAMES.ALBUM) {
-      if (tags[key]) {
-        info.album = tags[key];
-        break;
-      }
-    }
-
-    // Extract duration from tags if not already set
-    if (!info.duration) {
-      for (const key of TAG_NAMES.DURATION) {
-        if (tags[key]) {
-          const duration = parseFloat(tags[key]);
-          if (!isNaN(duration)) {
-            info.duration = Math.round(duration);
-            break;
-          }
+    // Only use stream tags for title if format tags didn't have it
+    if (!info.title) {
+      for (const key of TAG_NAMES.TITLE) {
+        if (streamTags[key] && !streamTags[key].toLowerCase().includes('cover') &&
+          !streamTags[key].toLowerCase().includes('.jpg')) {
+          info.title = streamTags[key];
+          logger.debug('MetadataExtractor', `Found title in stream tags: ${info.title}`);
+          break;
         }
       }
+    }
+
+    // Extract artist - try format tags first, then stream tags
+    for (const key of TAG_NAMES.ARTIST) {
+      if (formatTags[key]) {
+        info.artist = formatTags[key];
+        logger.debug('MetadataExtractor', `Found artist in format tags: ${info.artist}`);
+        break;
+      }
+    }
+
+    // Only use stream tags for artist if format tags didn't have it
+    if (!info.artist) {
+      for (const key of TAG_NAMES.ARTIST) {
+        if (streamTags[key]) {
+          info.artist = streamTags[key];
+          logger.debug('MetadataExtractor', `Found artist in stream tags: ${info.artist}`);
+          break;
+        }
+      }
+    }
+
+    // Extract album - from format tags only, usually not in streams
+    for (const key of TAG_NAMES.ALBUM) {
+      if (formatTags[key]) {
+        info.album = formatTags[key];
+        break;
+      }
+    }
+
+    // Extract duration from format section if available
+    if (data.format && data.format.duration) {
+      info.duration = parseFloat(data.format.duration);
     }
 
     return info;
   }
+
 
   /**
    * Normalize and merge metadata
@@ -135,7 +208,19 @@ export class MetadataExtractor {
     tagInfo: Partial<TrackMetadata>,
     filePath: string
   ): TrackMetadata {
-    // Prefer tag info over basic info
+    // Debug what we're getting from each source
+    logger.debug('MetadataExtractor', `Basic info: ${JSON.stringify(basicInfo)}`);
+    logger.debug('MetadataExtractor', `Tag info: ${JSON.stringify(tagInfo)}`);
+
+    // Special handling for suspicious title values
+    if (tagInfo.title &&
+      (tagInfo.title.toLowerCase().includes('.jpg') ||
+        tagInfo.title.toLowerCase().includes('.png') ||
+        tagInfo.title.toLowerCase().includes('cover'))) {
+      logger.warn('MetadataExtractor', `Detected suspicious title in metadata: "${tagInfo.title}"`);
+    }
+
+    // Create a merged object with tag info taking priority
     const metadata: TrackMetadata = {
       artist: tagInfo.artist || basicInfo.artist || 'Unknown Artist',
       title: tagInfo.title || basicInfo.title || path.basename(filePath, path.extname(filePath)),
@@ -144,10 +229,18 @@ export class MetadataExtractor {
       filepath: filePath
     };
 
-    // Clean up metadata
-    metadata.artist = metadata.artist.trim();
-    metadata.title = metadata.title.trim();
-    if (metadata.album) metadata.album = metadata.album.trim();
+    if (metadata.title.toLowerCase().includes('cover.jpg')) {
+      logger.warn('MetadataExtractor', `WARNING: Title contains "cover.jpg" for file: ${filePath}`);
+      // logger.debug('MetadataExtractor', `Raw ffprobe data: ${JSON.stringify(metadata)}`);
+    }
+
+    // Make sure we're not accidentally picking up "cover.jpg" anywhere
+    if (metadata.title && metadata.title.toLowerCase().includes('cover.jpg')) {
+      // This is incorrect - replace with just the filename without extension
+
+      metadata.title = path.basename(filePath, path.extname(filePath));
+      logger.debug('MetadataExtractor', `Fixed incorrect title containing "cover.jpg": ${metadata.title}`);
+    }
 
     return metadata;
   }
