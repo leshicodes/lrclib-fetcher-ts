@@ -1,61 +1,107 @@
-# lrclib-fetcher-ts
+# LRCLib Fetcher
 
-A TypeScript library for finding and downloading synchronized lyrics for your music files.
-
-## Overview
-
-`lrclib-fetcher-ts` automatically scans your music collection, extracts metadata, and fetches synchronized lyrics from lrclib.net. It creates `.lrc` files (for synchronized lyrics) or `.txt` files (for plain text lyrics) alongside your music files, making them compatible with most music players that support lyrics display.
+A TypeScript library and CLI tool for fetching synchronized lyrics from [LRCLib.net](https://LRCLib.net) for your music files.
 
 ## Features
 
-- 🔍 Recursively scans directories for music files (MP3, FLAC, M4A, OGG, WAV, WMA)
-- 📝 Extracts metadata using FFprobe for accurate artist/title information
-- 🎵 Fetches both synchronized and plain text lyrics from lrclib.net
-- ⚡ Processes files in batches with configurable rate limiting
-- 🚫 Skip files that already have lyrics files
-- 🔄 Override mode to replace existing lyrics
-- 📊 Detailed progress reporting and results
+- **Batch Processing**: Process multiple music files in parallel with configurable batch sizes
+- **Metadata Extraction**: Extract artist and title information from audio file metadata
+- **Synchronized Lyrics**: Prioritizes synchronized .lrc files over plain text lyrics
+- **Smart Search**: Multiple fallback strategies to find the best match for your music
+- **File Management**: Skip existing lyrics or overwrite as needed
+- **Detailed Logging**: Configurable logging levels for debugging
 
 ## Installation
+
+### NPM Global Installation
+
+```bash
+npm install -g lrclib-fetcher-ts
+```
+
+### Local Installation
 
 ```bash
 npm install lrclib-fetcher-ts
 ```
 
-### Prerequisites
+## CLI Usage
 
-This library requires [FFprobe](https://ffmpeg.org/) for metadata extraction. The package includes a bundled version of FFprobe for most platforms, but you may need to install it separately on some systems.
+### Basic Usage
 
-## Quick Start
+Process a directory of music files:
 
-```typescript
-import { createLyricsFetcher } from 'lrclib-fetcher-ts';
-
-// Create a lyrics fetcher with default options
-const fetcher = createLyricsFetcher();
-
-// Process a directory
-fetcher.processDirectory('/path/to/music')
-  .then(results => {
-    console.log(`Successfully processed ${results.filter(r => r.success).length} files`);
-  })
-  .catch(error => {
-    console.error('Error processing files:', error);
-  });
+```bash
+lrclib /path/to/your/music
 ```
 
-## Advanced Usage
+### Command Line Options
 
-### With Custom Options
+```
+Options:
+  -r, --recursive                Scan directories recursively (default: true)
+  --no-skip-existing             Don't skip files that already have lyrics
+  -o, --overwrite                Overwrite existing lyrics files (default: false)
+  -b, --batch-size <number>      Number of files to process in parallel (default: "5")
+  -d, --delay <number>           Delay between API requests in milliseconds (default: "1000")
+  --allow-title-only             Allow searching by title only if artist search fails (default: false)
+  --prefer-synced                Prefer synchronized lyrics over plain text (default: true)
+  --log-level <level>            Log level (debug, info, warn, error) (default: "info")
+  --log-file <path>              Path to log file
+  -h, --help                     Display help
+  -V, --version                  Show version
+```
+
+### Examples
+
+```bash
+# Process a directory with default settings
+lrclib ~/Music
+
+# Process with custom options
+lrclib ~/Music --overwrite --batch-size 10 --delay 2000
+
+# Only process files without existing lyrics
+lrclib ~/Music --skip-existing
+
+# Write logs to a file
+lrclib ~/Music --log-level debug --log-file lyrics.log
+```
+
+## Using with Docker
+
+:::note
+this is a TODO area! havent finished yet!
+:::
+
+### Build the Docker image
+
+```bash
+docker build -t lrclib-fetcher .
+```
+
+### Run with Docker
+
+```bash
+docker run -v "/path/to/your/music:/music" lrclib-fetcher
+```
+
+### Using custom options with Docker
+
+```bash
+docker run -v "/path/to/your/music:/music" lrclib-fetcher /music --overwrite --batch-size 10
+```
+
+## Programmatic Usage
 
 ```typescript
 import { createLyricsFetcher } from 'lrclib-fetcher-ts';
 
+// Create a fetcher with custom options
 const fetcher = createLyricsFetcher({
-  logging: {
-    level: 'debug',
-    logToFile: true,
-    logFilePath: 'lyrics-fetcher.log'
+  logging: { 
+    level: 'info',
+    logToFile: false
   },
   search: {
     allowTitleOnlySearch: true,
@@ -72,193 +118,48 @@ const fetcher = createLyricsFetcher({
   }
 });
 
-// Process all music files in a directory and its subdirectories
-const results = await fetcher.processDirectory('/path/to/music');
-```
-
-### Process Individual Files
-
-```typescript
-import { LyricsFetcherOrchestrator } from 'lrclib-fetcher-ts';
-
-const orchestrator = new LyricsFetcherOrchestrator();
-
-// Process a single file
-const result = await orchestrator.processAudioFile('/path/to/music/song.mp3', {
-  file: {
-    overwriteExisting: true
-  }
-});
-
-if (result.success) {
-  console.log(`Lyrics saved to: ${result.lyricPath}`);
-} else {
-  console.error(`Failed: ${result.error?.message}`);
-}
+// Process a directory
+fetcher.processDirectory('/path/to/music')
+  .then(results => {
+    console.log(`Processed ${results.length} files`);
+    console.log(`${results.filter(r => r.success).length} successful`);
+  })
+  .catch(error => {
+    console.error('Error:', error);
+  });
 ```
 
 ## API Reference
 
-### `createLyricsFetcher(options?)`
+### `createLyricsFetcher(options)`
 
 Creates a new lyrics fetcher instance with the specified options.
 
-#### Options
+### `processDirectory(directory, options)`
 
-The options object has the following structure:
+Processes all audio files in the specified directory and its subdirectories.
 
-```typescript
-{
-  logging: {
-    level: 'debug' | 'info' | 'warn' | 'error';
-    logToFile?: boolean;
-    logFilePath?: string;
-  },
-  search: {
-    allowTitleOnlySearch: boolean;
-    preferSynced: boolean;
-  },
-  file: {
-    skipExisting: boolean;
-    overwriteExisting: boolean;
-  },
-  batch: {
-    enabled: boolean;
-    size: number;
-    delayMs: number;
-  }
-}
-```
+## Requirements
 
-| Option | Type | Description |
-|--------|------|-------------|
-| `logging.level` | string | Log level: 'debug', 'info', 'warn', or 'error' |
-| `logging.logToFile` | boolean | Whether to write logs to a file |
-| `logging.logFilePath` | string | Path to the log file if logging to file |
-| `search.allowTitleOnlySearch` | boolean | Allow searching by title only if artist search fails |
-| `search.preferSynced` | boolean | Prefer synchronized lyrics over plain text |
-| `file.skipExisting` | boolean | Skip files that already have lyrics files |
-| `file.overwriteExisting` | boolean | Replace existing lyrics files |
-| `batch.enabled` | boolean | Enable batch processing |
-| `batch.size` | number | Number of files to process in parallel |
-| `batch.delayMs` | number | Milliseconds between API requests |
-
-### `LyricsFetcherOrchestrator`
-
-The main class that orchestrates the lyrics fetching process.
-
-#### Methods
-
-- `processDirectory(directory, options?)`: Process all music files in a directory
-- `processAudioFile(filePath, options?)`: Process a single audio file
-
-### File Scanner
-
-The file scanner module provides functions for finding music files in directories.
-
-```typescript
-import { scanDirectory } from 'lrclib-fetcher-ts';
-
-const files = await scanDirectory('/path/to/music', {
-  recursive: true,
-  skipExisting: true,
-  extensions: ['mp3', 'flac']
-});
-```
-
-### Metadata Extractor
-
-The metadata extractor module provides functions for getting metadata from audio files.
-
-```typescript
-import { extractMetadata } from 'lrclib-fetcher-ts';
-
-const metadata = await extractMetadata('/path/to/music/song.mp3');
-console.log(metadata);
-// { artist: 'Artist Name', title: 'Song Title', album: 'Album Name', duration: 240, filepath: '/path/to/music/song.mp3' }
-```
-
-### Lyrics API Client
-
-The API client can be used directly to search for lyrics:
-
-```typescript
-import { LrcLibClient } from 'lrclib-fetcher-ts';
-
-const client = new LrcLibClient();
-const lyrics = await client.searchLyrics({
-  artist: 'Artist Name',
-  title: 'Song Title',
-  album: 'Album Name',
-  duration: 240,
-  filepath: '/path/to/file.mp3'
-});
-
-if (lyrics && lyrics.syncedLyrics) {
-  console.log('Found synchronized lyrics!');
-}
-```
-
-### File Writer
-
-```typescript
-import { LyricsFileWriter } from 'lrclib-fetcher-ts';
-
-const writer = new LyricsFileWriter();
-const lyricsPath = await writer.writeLyrics('/path/to/audio.mp3', {
-  artist: 'Artist Name',
-  title: 'Song Title',
-  syncedLyrics: '[00:01.00]Lyrics line 1\n[00:05.00]Lyrics line 2',
-  plainLyrics: 'Lyrics line 1\nLyrics line 2',
-  source: 'lrclib.net',
-  instrumental: false
-});
-```
-
-## Project Structure
-
-```
-lrclib-fetcher-ts/
-├── src/
-│   ├── types/           # Type definitions
-│   ├── scanner/         # File discovery
-│   ├── metadata/        # Metadata extraction
-│   ├── api/             # LrcLib API client
-│   ├── writer/          # Lyrics file writer
-│   ├── orchestrator/    # Main orchestrator
-│   ├── utils/           # Utilities (logging, error handling)
-│   └── index.ts         # Entry point
-├── docs/
-│   └── lrclib-api.md    # LrcLib API documentation
-└── tests/
-    └── music/           # Test music files
-```
-
-## Error Handling
-
-The library includes custom error classes for different types of failures:
-
-- `LrcLibError`: Base error class
-- `MetadataExtractionError`: Issues extracting metadata
-- `LyricsFetchError`: Issues fetching lyrics from the API
-- `FileWriteError`: Issues writing lyrics to files
-
-All errors are captured and included in the result objects, allowing the process to continue even when individual files fail. The result objects include:
-
-- `success`: Boolean indicating if the process was successful
-- `error`: Error object if the process failed
-- `metadata`: Extracted metadata
-- `lyricPath`: Path to the created lyrics file (if successful)
-
-## Acknowledgments
-
-- This project uses the [LrcLib API](https://lrclib.net/) for lyrics retrieval.
-- Metadata extraction is performed using [FFprobe](https://ffmpeg.org/).
+- Node.js 16 or later
+- ffmpeg/ffprobe (automatically installed via ffprobe-static)
 
 ## License
 
 MIT
 
+## Acknowledgements
+
+This project uses the unofficial LRCLib.net API as described in [the API documentation](https://github.com/tranxuanthang/lrcget/blob/master/lrclib-api.md). All lyrics are provided by LRCLib.net users.
+
 ## Contributing
 
-Contributions are welcome! Please check the contribution guidelines for more details.
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+Similar code found with 2 license types

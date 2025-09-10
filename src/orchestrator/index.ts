@@ -150,19 +150,25 @@ export class LyricsFetcherOrchestrator {
       }
 
       // Search for lyrics
+      logger.info('Orchestrator', `Searching lyrics for: ${metadata.artist} - ${metadata.title}`);
       const lyrics = await this.lrcLibClient.searchLyrics(metadata, {
         allowTitleOnlySearch: options.search.allowTitleOnlySearch,
         preferSynced: options.search.preferSynced
       });
 
       if (!lyrics) {
+        logger.info('Orchestrator', `No lyrics found for: ${metadata.artist} - ${metadata.title}`);
         return {
           filePath,
           metadata,
           success: false,
-          error: new Error('No lyrics found')
+          error: new Error(`No lyrics found for: ${metadata.artist} - ${metadata.title}`)
         };
       }
+      
+      // Log successful lyric fetching
+      logger.info('Orchestrator', `Found lyrics for: ${metadata.artist} - ${metadata.title} (${lyrics.syncedLyrics ? 'synchronized' : lyrics.plainLyrics ? 'plain' : 'instrumental'})`);
+      
 
       // Delete existing lyrics if overwrite mode is enabled
       if (options.file.overwriteExisting) {

@@ -36,20 +36,61 @@ export class LrcLibClient {
   async searchLyrics(metadata: TrackMetadata, options?: LyricSearchOptions): Promise<LyricResult | null> {
     logger.debug('LrcLibClient', `Starting search for: "${metadata.artist} - ${metadata.title}"`);
     logger.debug('LrcLibClient', `Complete metadata: ${JSON.stringify(metadata)}`);
+    logger.debug('LrcLibClient', `Search options: ${JSON.stringify(options || {})}`);
 
+    const preferSynced = options?.preferSynced !== false; // Default to true if not specified
+    
     try {
+      // Variables to store results for potential fallback use
+      let exactMatch: LyricResult | null = null;
+      let artistTitleMatch: LyricResult | null = null;
+      let titleMatch: LyricResult | null = null;
+      
       // Try exact match first
-      const exactMatch = await this.findExactMatch(metadata);
-      if (exactMatch) return exactMatch;
+      exactMatch = await this.findExactMatch(metadata);
+      if (exactMatch) {
+        if (preferSynced && !exactMatch.syncedLyrics && !exactMatch.instrumental) {
+          logger.debug('LrcLibClient', `Found exact match but no synced lyrics, continuing search...`);
+          // Continue searching if we prefer synced lyrics but didn't find any
+        } else {
+          return exactMatch;
+        }
+      }
 
       // Try artist and title match
-      const artistTitleMatch = await this.findByArtistAndTitle(metadata);
-      if (artistTitleMatch) return artistTitleMatch;
+      artistTitleMatch = await this.findByArtistAndTitle(metadata);
+      if (artistTitleMatch) {
+        if (preferSynced && !artistTitleMatch.syncedLyrics && !artistTitleMatch.instrumental) {
+          logger.debug('LrcLibClient', `Found artist/title match but no synced lyrics, continuing search...`);
+          // Continue searching if we prefer synced lyrics but didn't find any
+        } else {
+          return artistTitleMatch;
+        }
+      }
 
       // Try title-only search as last resort
       if (options?.allowTitleOnlySearch) {
-        const titleMatch = await this.findByTitleOnly(metadata);
-        if (titleMatch) return titleMatch;
+        titleMatch = await this.findByTitleOnly(metadata);
+        if (titleMatch) {
+          if (preferSynced && !titleMatch.syncedLyrics && !titleMatch.instrumental) {
+            logger.debug('LrcLibClient', `Found title-only match but no synced lyrics, will use as fallback`);
+            // For title-only, if we don't have synced lyrics, keep the result as fallback
+          } else {
+            return titleMatch;
+          }
+        }
+      }
+      
+      // If we got here and have a non-synced match that we skipped earlier, return it as last resort
+      if (exactMatch) {
+        logger.debug('LrcLibClient', `Using non-synced exact match as fallback`);
+        return exactMatch;
+      } else if (artistTitleMatch) {
+        logger.debug('LrcLibClient', `Using non-synced artist/title match as fallback`);
+        return artistTitleMatch;
+      } else if (titleMatch) {
+        logger.debug('LrcLibClient', `Using non-synced title-only match as fallback`);
+        return titleMatch;
       }
 
       logger.debug('LrcLibClient', `No lyrics found for: "${metadata.artist} - ${metadata.title}" after all search attempts`);
@@ -86,16 +127,37 @@ export class LrcLibClient {
 
         // Log response data
         logger.debug('LrcLibClient', `Response status: ${response.status}`);
+        logger.debug('LrcLibClient', `Response data type: ${typeof response.data}`);
         logger.debug('LrcLibClient', `Response data: ${JSON.stringify(response.data)}`);
 
-        if (response.data && Array.isArray(response.data) && response.data.length > 0) {
-          const result = this.processApiResponse(response.data[0], metadata);
-          if (result) {
-            logger.debug('LrcLibClient', `Found exact match for: "${metadata.artist} - ${metadata.title}"`);
-            return result;
+        // Handle both array and single object responses
+        if (response.data) {
+          if (Array.isArray(response.data)) {
+            // Handle array response
+            if (response.data.length > 0) {
+              logger.debug('LrcLibClient', `Found ${response.data.length} results in array response`);
+              const result = this.processApiResponse(response.data[0], metadata);
+              if (result) {
+                logger.debug('LrcLibClient', `Successfully processed result for: "${metadata.artist} - ${metadata.title}"`);
+                return result;
+              }
+            } else {
+              logger.debug('LrcLibClient', `Empty array response for exact match`);
+            }
+          } else if (typeof response.data === 'object') {
+            // Handle single object response
+            logger.debug('LrcLibClient', `Found single object response`);
+            const result = this.processApiResponse(response.data, metadata);
+            if (result) {
+              logger.debug('LrcLibClient', `Successfully processed single object result for: "${metadata.artist} - ${metadata.title}"`);
+              return result;
+            }
+          } else if (response.data === null) {
+            // Handle null response (might be returned as 200 OK with null data)
+            logger.debug('LrcLibClient', `Received null data in response`);
           }
         } else {
-          logger.debug('LrcLibClient', `No results found in exact match`);
+          logger.debug('LrcLibClient', `No data in response for exact match`);
         }
 
         return null;
@@ -146,16 +208,37 @@ export class LrcLibClient {
 
         // Log response data
         logger.debug('LrcLibClient', `Response status: ${response.status}`);
+        logger.debug('LrcLibClient', `Response data type: ${typeof response.data}`);
         logger.debug('LrcLibClient', `Response data: ${JSON.stringify(response.data)}`);
 
-        if (response.data && Array.isArray(response.data) && response.data.length > 0) {
-          const result = this.processApiResponse(response.data[0], metadata);
-          if (result) {
-            logger.debug('LrcLibClient', `Found artist/title match for: "${metadata.artist} - ${metadata.title}"`);
-            return result;
+        // Handle both array and single object responses
+        if (response.data) {
+          if (Array.isArray(response.data)) {
+            // Handle array response
+            if (response.data.length > 0) {
+              logger.debug('LrcLibClient', `Found ${response.data.length} results in array response`);
+              const result = this.processApiResponse(response.data[0], metadata);
+              if (result) {
+                logger.debug('LrcLibClient', `Successfully processed result for: "${metadata.artist} - ${metadata.title}"`);
+                return result;
+              }
+            } else {
+              logger.debug('LrcLibClient', `Empty array response for artist/title search`);
+            }
+          } else if (typeof response.data === 'object') {
+            // Handle single object response
+            logger.debug('LrcLibClient', `Found single object response`);
+            const result = this.processApiResponse(response.data, metadata);
+            if (result) {
+              logger.debug('LrcLibClient', `Successfully processed single object result for: "${metadata.artist} - ${metadata.title}"`);
+              return result;
+            }
+          } else if (response.data === null) {
+            // Handle null response (might be returned as 200 OK with null data)
+            logger.debug('LrcLibClient', `Received null data in response`);
           }
         } else {
-          logger.debug('LrcLibClient', `No results found in artist/title search`);
+          logger.debug('LrcLibClient', `No data in response for artist/title search`);
         }
 
         return null;
@@ -204,28 +287,48 @@ export class LrcLibClient {
 
         // Log response data
         logger.debug('LrcLibClient', `Response status: ${response.status}`);
+        logger.debug('LrcLibClient', `Response data type: ${typeof response.data}`);
         logger.debug('LrcLibClient', `Response data: ${JSON.stringify(response.data)}`);
 
-        if (response.data && Array.isArray(response.data) && response.data.length > 0) {
-          // For title-only searches, we should be more careful with the results
-          logger.debug('LrcLibClient', `Found ${response.data.length} results for title-only search: "${metadata.title}"`);
-          const bestMatch = this.findBestMatch(response.data, metadata);
-          if (bestMatch) {
-            logger.debug('LrcLibClient', `Selected best match: ${JSON.stringify({
-              artist: bestMatch.artistName,
-              title: bestMatch.trackName,
-              album: bestMatch.albumName
-            })}`);
-            const result = this.processApiResponse(bestMatch, metadata);
+        // Handle both array and single object responses
+        if (response.data) {
+          if (Array.isArray(response.data)) {
+            // Handle array response
+            if (response.data.length > 0) {
+              // For title-only searches, we should be more careful with the results
+              logger.debug('LrcLibClient', `Found ${response.data.length} results for title-only search: "${metadata.title}"`);
+              const bestMatch = this.findBestMatch(response.data, metadata);
+              if (bestMatch) {
+                logger.debug('LrcLibClient', `Selected best match: ${JSON.stringify({
+                  artist: bestMatch.artistName,
+                  title: bestMatch.trackName,
+                  album: bestMatch.albumName
+                })}`);
+                const result = this.processApiResponse(bestMatch, metadata);
+                if (result) {
+                  logger.debug('LrcLibClient', `Found title-only match for: "${metadata.title}"`);
+                  return result;
+                }
+              } else {
+                logger.debug('LrcLibClient', `No best match found among ${response.data.length} results`);
+              }
+            } else {
+              logger.debug('LrcLibClient', `Empty array response for title-only search`);
+            }
+          } else if (typeof response.data === 'object') {
+            // Handle single object response
+            logger.debug('LrcLibClient', `Found single object response for title-only search`);
+            const result = this.processApiResponse(response.data, metadata);
             if (result) {
-              logger.debug('LrcLibClient', `Found title-only match for: "${metadata.title}"`);
+              logger.debug('LrcLibClient', `Successfully processed single object result for title-only search: "${metadata.title}"`);
               return result;
             }
-          } else {
-            logger.debug('LrcLibClient', `No best match found among ${response.data.length} results`);
+          } else if (response.data === null) {
+            // Handle null response (might be returned as 200 OK with null data)
+            logger.debug('LrcLibClient', `Received null data in title-only response`);
           }
         } else {
-          logger.debug('LrcLibClient', `No results found in title-only search`);
+          logger.debug('LrcLibClient', `No data in response for title-only search`);
         }
 
         return null;
@@ -288,13 +391,63 @@ export class LrcLibClient {
       logger.debug('LrcLibClient', `Cannot process API response: data is null or undefined`);
       return null;
     }
+    
+    // Check if it's an empty object
+    if (typeof data === 'object' && Object.keys(data).length === 0) {
+      logger.debug('LrcLibClient', `Cannot process API response: data is an empty object`);
+      return null;
+    }
+
+    // Log raw response data for debugging
+    logger.debug('LrcLibClient', `Processing raw API data: ${JSON.stringify(data)}`);
+
+    // Handle different field name possibilities for artist
+    const artist = 
+      data.artistName || 
+      data.artist_name || 
+      data.artist || 
+      metadata.artist;
+
+    // Handle different field name possibilities for title
+    const title = 
+      data.trackName || 
+      data.track_name || 
+      data.title || 
+      metadata.title;
+
+    // Handle different field name possibilities for album
+    const album = 
+      data.albumName || 
+      data.album_name || 
+      data.album || 
+      metadata.album || 
+      '';
+
+    // Handle different field name possibilities for lyrics
+    const syncedLyrics = 
+      data.syncedLyrics || 
+      data.synced_lyrics || 
+      data.lrc || 
+      null;
+
+    const plainLyrics = 
+      data.plainLyrics || 
+      data.plain_lyrics || 
+      data.text || 
+      null;
+
+    // Check if we have any lyrics at all
+    if (!syncedLyrics && !plainLyrics && !data.instrumental) {
+      logger.debug('LrcLibClient', `No lyrics content in API response`);
+      return null;
+    }
 
     const result = {
-      artist: data.artistName || metadata.artist,
-      title: data.trackName || metadata.title,
-      album: data.albumName || metadata.album || '',
-      syncedLyrics: data.syncedLyrics || null,
-      plainLyrics: data.plainLyrics || null,
+      artist,
+      title,
+      album,
+      syncedLyrics,
+      plainLyrics,
       source: 'lrclib.net',
       instrumental: !!data.instrumental
     };

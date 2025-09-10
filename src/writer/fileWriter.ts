@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { LyricResult } from '../types';
+import { logger } from '../utils/logger';
 
 /**
  * Writer for saving lyrics to files
@@ -14,31 +15,53 @@ export class LyricsFileWriter {
     audioFilePath: string,
     lyrics: LyricResult
   ): Promise<string | undefined> {
-    if (!lyrics) return undefined;
+    if (!lyrics) {
+      logger.warn('LyricsFileWriter', `No lyrics provided for: ${audioFilePath}`);
+      return undefined;
+    }
 
     const baseFilePath = audioFilePath.substring(0, audioFilePath.lastIndexOf('.'));
     
     // If we have synchronized lyrics, save as .lrc
     if (lyrics.syncedLyrics) {
       const lrcFilePath = `${baseFilePath}.lrc`;
-      await fs.promises.writeFile(lrcFilePath, lyrics.syncedLyrics, 'utf8');
-      return lrcFilePath;
+      try {
+        await fs.promises.writeFile(lrcFilePath, lyrics.syncedLyrics, 'utf8');
+        logger.info('LyricsFileWriter', `Written synchronized lyrics to: ${path.basename(lrcFilePath)}`);
+        return lrcFilePath;
+      } catch (error) {
+        logger.error('LyricsFileWriter', `Error writing synchronized lyrics to ${lrcFilePath}: ${error instanceof Error ? error.message : String(error)}`);
+        throw error;
+      }
     }
     
     // If we only have plain lyrics, save as .txt
     if (lyrics.plainLyrics) {
       const txtFilePath = `${baseFilePath}.txt`;
-      await fs.promises.writeFile(txtFilePath, lyrics.plainLyrics, 'utf8');
-      return txtFilePath;
+      try {
+        await fs.promises.writeFile(txtFilePath, lyrics.plainLyrics, 'utf8');
+        logger.info('LyricsFileWriter', `Written plain lyrics to: ${path.basename(txtFilePath)}`);
+        return txtFilePath;
+      } catch (error) {
+        logger.error('LyricsFileWriter', `Error writing plain lyrics to ${txtFilePath}: ${error instanceof Error ? error.message : String(error)}`);
+        throw error;
+      }
     }
     
     // If marked as instrumental, create an empty .lrc file with a comment
     if (lyrics.instrumental) {
       const lrcFilePath = `${baseFilePath}.lrc`;
-      await fs.promises.writeFile(lrcFilePath, '[00:00.00]Instrumental\n', 'utf8');
-      return lrcFilePath;
+      try {
+        await fs.promises.writeFile(lrcFilePath, '[00:00.00]Instrumental\n', 'utf8');
+        logger.info('LyricsFileWriter', `Written instrumental marker to: ${path.basename(lrcFilePath)}`);
+        return lrcFilePath;
+      } catch (error) {
+        logger.error('LyricsFileWriter', `Error writing instrumental marker to ${lrcFilePath}: ${error instanceof Error ? error.message : String(error)}`);
+        throw error;
+      }
     }
     
+    logger.warn('LyricsFileWriter', `No lyrics content available for: ${audioFilePath}`);
     return undefined;
   }
 
