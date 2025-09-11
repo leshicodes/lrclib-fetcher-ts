@@ -20,7 +20,7 @@ jobs:
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-          repository: leshicodes//lrclib-fetcher
+          repository: leshicodes/lrclib-fetcher
           short-description: ${{ github.event.repository.description }}
           readme-filepath: ./README.md
           enable-url-completion: true  # Add this line
