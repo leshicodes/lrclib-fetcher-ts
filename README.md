@@ -74,7 +74,23 @@ lrclib ~/Music --log-level debug --log-file lyrics.log
 
 ## Using with Docker
 
-### Build the Docker image
+### Option 1: Using the maintained Docker image
+
+The easiest way to use the tool with Docker is to use the maintained image:
+
+```bash
+docker pull leshicodes/lrclib-fetcher:0.0.2
+```
+
+And run it with:
+
+```bash
+docker run -v "/path/to/your/music:/music" leshicodes/lrclib-fetcher:0.0.2
+```
+
+### Option 2: Building your own Docker image
+
+Alternatively, you can build the Docker image yourself:
 
 ```bash
 docker build -t lrclib-fetcher .
@@ -89,7 +105,7 @@ docker run -v "/path/to/your/music:/music" lrclib-fetcher
 ### Using custom options with Docker
 
 ```bash
-docker run -v "/path/to/your/music:/music" lrclib-fetcher /music --overwrite --batch-size 10
+docker run -v "/path/to/your/music:/music" leshicodes/lrclib-fetcher:0.0.2 /music --overwrite --batch-size 10
 ```
 
 ## Programmatic Usage
@@ -156,10 +172,11 @@ This project uses the unofficial LRCLib.net API as described in [the API documen
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
+When contributing, please follow my patterns and methodologies that are documented in the [./docs](https://github.com/leshicodes/lrclib-fetcher-ts/tree/main/docs) path
+
+
 1. Fork the repository
 2. Create your feature branch (`git checkout -b feature/amazing-feature`)
 3. Commit your changes (`git commit -m 'Add some amazing feature'`)
 4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-Similar code found with 2 license types
+5. Open a Pull Requests
