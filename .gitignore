@@ -1,5 +1,7 @@
 music/*
 tests/music/*
+tests/logs/*
+tests/Remove-LyricFiles.ps1
 node_modules
 .github/copilot
 dist/
