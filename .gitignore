@@ -1,5 +1,6 @@
 music/*
 tests/music/*
 node_modules
-.github/
+.github/copilot
 dist/
+!.github/workflows/*

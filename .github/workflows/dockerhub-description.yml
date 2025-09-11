@@ -1,0 +1,25 @@
+name: Update Docker Hub Description
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'README.md'
+      - '.github/workflows/dockerhub-description.yml'
+  workflow_dispatch:
+
+jobs:
+  dockerhub-description:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Docker Hub Description
+        uses: peter-evans/dockerhub-description@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: leshicodes/lrclib-fetcher
+          short-description: ${{ github.event.repository.description }}
+          readme-filepath: ./README.md

@@ -1,0 +1,14 @@
+version: '3'
+
+services:
+  lrclib-fetcher:
+    build: .
+    volumes:
+      - ./tests/music:/music
+      - ./tests/logs:/var/log
+    environment:
+      - LRCLIB_RECURSIVE=true
+      - LRCLIB_SKIP_EXISTING=true
+      - LRCLIB_BATCH_SIZE=10
+      - LRCLIB_LOG_LEVEL=info
+      - LRCLIB_LOG_FILE=/var/log/lrclib.log

@@ -70,10 +70,6 @@ lrclib ~/Music --log-level debug --log-file lyrics.log
 
 ## Using with Docker
 
-:::note
-this is a TODO area! havent finished yet!
-:::
-
 ### Build the Docker image
 
 ```bash
