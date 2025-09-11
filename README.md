@@ -1,6 +1,8 @@
 # [LRCLib Fetcher](https://github.com/leshicodes/lrclib-fetcher-ts)
 
-![logo](https://raw.githubusercontent.com/leshicodes/lrclib-fetcher-ts/main/assets/logo/logo.png)
+<p align="center" width="100%">
+    <img width="33%" src="https://raw.githubusercontent.com/leshicodes/lrclib-fetcher-ts/main/assets/logo/logo-25.png"> 
+</p>
 
 A TypeScript library and CLI tool for fetching synchronized lyrics from [LRCLib.net](https://LRCLib.net) for your music files.
 
