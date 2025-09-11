@@ -10,40 +10,40 @@ on:
 
 jobs:
 
-  test-api:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Test Docker Hub Authentication
-        run: |
-          echo "Testing Docker Hub login..."
-          TOKEN_RESPONSE=$(curl -s -X POST \
-            -H "Content-Type: application/json" \
-            -d '{"username": "${{ secrets.DOCKERHUB_USERNAME }}", "password": "${{ secrets.DOCKERHUB_TOKEN }}"}' \
-            https://hub.docker.com/v2/users/login/)
+  # test-api:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Test Docker Hub Authentication
+  #       run: |
+  #         echo "Testing Docker Hub login..."
+  #         TOKEN_RESPONSE=$(curl -s -X POST \
+  #           -H "Content-Type: application/json" \
+  #           -d '{"username": "${{ secrets.DOCKERHUB_USERNAME }}", "password": "${{ secrets.DOCKERHUB_TOKEN }}"}' \
+  #           https://hub.docker.com/v2/users/login/)
           
-          echo "Response: ${TOKEN_RESPONSE}"
+  #         echo "Response: ${TOKEN_RESPONSE}"
           
-          TOKEN=$(echo $TOKEN_RESPONSE | jq -r .token)
+  #         TOKEN=$(echo $TOKEN_RESPONSE | jq -r .token)
           
-          if [ "$TOKEN" == "null" ] || [ -z "$TOKEN" ]; then
-            echo "❌ Authentication failed"
-            exit 1
-          else
-            echo "✅ Authentication successful"
-            echo "Testing repository access..."
+  #         if [ "$TOKEN" == "null" ] || [ -z "$TOKEN" ]; then
+  #           echo "❌ Authentication failed"
+  #           exit 1
+  #         else
+  #           echo "✅ Authentication successful"
+  #           echo "Testing repository access..."
             
-            REPO_INFO=$(curl -s -H "Authorization: JWT $TOKEN" \
-              https://hub.docker.com/v2/repositories/leshicodes/lrclib-fetcher/)
+  #           REPO_INFO=$(curl -s -H "Authorization: JWT $TOKEN" \
+  #             https://hub.docker.com/v2/repositories/leshicodes/lrclib-fetcher/)
             
-            echo "Repository info: ${REPO_INFO}"
+  #           echo "Repository info: ${REPO_INFO}"
             
-            if [[ $REPO_INFO == *"not found"* ]] || [[ $REPO_INFO == *"error"* ]]; then
-              echo "❌ Repository access failed"
-              exit 1
-            else
-              echo "✅ Repository access successful"
-            fi
-          fi
+  #           if [[ $REPO_INFO == *"not found"* ]] || [[ $REPO_INFO == *"error"* ]]; then
+  #             echo "❌ Repository access failed"
+  #             exit 1
+  #           else
+  #             echo "✅ Repository access successful"
+  #           fi
+  #         fi
 
   dockerhub-description:
     runs-on: ubuntu-latest
@@ -56,7 +56,6 @@ jobs:
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-          repository: leshicodes/lrclib-fetcher
+          repository: lrclib-fetcher  # ONLY the repository name, not the namespace
           short-description: ${{ github.event.repository.description }}
           readme-filepath: ./README.md
-          enable-url-completion: true  # Add this line
