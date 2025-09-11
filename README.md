@@ -150,7 +150,7 @@ MIT
 
 ## Acknowledgements
 
-This project uses the unofficial LRCLib.net API as described in [the API documentation](https://github.com/tranxuanthang/lrcget/blob/master/lrclib-api.md). All lyrics are provided by LRCLib.net users.
+This project uses the unofficial LRCLib.net API as described in [the API documentation](./docs/lrclib-api.md). All lyrics are provided by LRCLib.net users.
 
 ## Contributing
 
