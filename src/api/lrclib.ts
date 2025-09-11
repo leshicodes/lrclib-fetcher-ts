@@ -2,18 +2,41 @@ import axios, { AxiosInstance, AxiosRequestConfig, AxiosError } from 'axios';
 import { logger } from '../utils/logger';
 import { TrackMetadata, LyricResult, LyricSearchOptions } from '../types';
 import { LyricsFetchError } from '../utils/errorHandling';
+import path from 'path';
+import fs from 'fs';
 
 export interface HttpClient {
   get(url: string, config?: any): Promise<any>;
 }
 
+/*
+* Load package info for User-Agent and repo URL
+*/
+function getPackageInfo() {
+  try {
+    // Read package.json from the project root
+    const packageJsonPath = path.resolve(__dirname, '../../package.json');
+    const packageJsonContent = fs.readFileSync(packageJsonPath, 'utf8');
+    const packageJson = JSON.parse(packageJsonContent);
 
-// // API base URLs
-// const SEARCH_API_URL = 'https://lrclib.net/api/search';
-// const GET_API_URL = 'https://lrclib.net/api/get';
+    return {
+      name: packageJson.name,
+      version: packageJson.version,
+      repoUrl: packageJson.repository?.url ||
+        packageJson.homepage ||
+        'https://github.com/leshicodes/lrclib-fetcher-ts'
+    };
+  } catch (error) {
+    // Fallback to hardcoded values if package.json can't be read
+    logger.warn('LrcLibClient', `Failed to read package.json: ${error instanceof Error ? error.message : String(error)}`);
+    return {
+      name: 'lrclib-fetcher-ts',
+      version: '0.0.1',
+      repoUrl: 'https://github.com/leshicodes/lrclib-fetcher-ts'
+    };
+  }
+}
 
-// // Rate limiting settings
-// const DEFAULT_DELAY_MS = 1000;
 
 /**
  * LrcLib API client for fetching lyrics
@@ -23,9 +46,14 @@ export class LrcLibClient {
   private readonly httpClient: HttpClient;
 
   constructor(httpClient?: HttpClient) {
+    const { name, version, repoUrl } = getPackageInfo();
+    const userAgent = `${name}/${version} (${repoUrl})`;
+
+    logger.debug('LrcLibClient', `Using User-Agent: ${userAgent}`);
+
     this.httpClient = httpClient || axios.create({
       headers: {
-        'User-Agent': 'lrclib-fetcher-ts/0.0.1 (https://github.com/yourusername/lrclib-fetcher-ts)'
+        'User-Agent': userAgent
       }
     });
   }
@@ -39,13 +67,13 @@ export class LrcLibClient {
     logger.debug('LrcLibClient', `Search options: ${JSON.stringify(options || {})}`);
 
     const preferSynced = options?.preferSynced !== false; // Default to true if not specified
-    
+
     try {
       // Variables to store results for potential fallback use
       let exactMatch: LyricResult | null = null;
       let artistTitleMatch: LyricResult | null = null;
       let titleMatch: LyricResult | null = null;
-      
+
       // Try exact match first
       exactMatch = await this.findExactMatch(metadata);
       if (exactMatch) {
@@ -80,7 +108,7 @@ export class LrcLibClient {
           }
         }
       }
-      
+
       // If we got here and have a non-synced match that we skipped earlier, return it as last resort
       if (exactMatch) {
         logger.debug('LrcLibClient', `Using non-synced exact match as fallback`);
@@ -391,7 +419,7 @@ export class LrcLibClient {
       logger.debug('LrcLibClient', `Cannot process API response: data is null or undefined`);
       return null;
     }
-    
+
     // Check if it's an empty object
     if (typeof data === 'object' && Object.keys(data).length === 0) {
       logger.debug('LrcLibClient', `Cannot process API response: data is an empty object`);
@@ -402,38 +430,38 @@ export class LrcLibClient {
     logger.debug('LrcLibClient', `Processing raw API data: ${JSON.stringify(data)}`);
 
     // Handle different field name possibilities for artist
-    const artist = 
-      data.artistName || 
-      data.artist_name || 
-      data.artist || 
+    const artist =
+      data.artistName ||
+      data.artist_name ||
+      data.artist ||
       metadata.artist;
 
     // Handle different field name possibilities for title
-    const title = 
-      data.trackName || 
-      data.track_name || 
-      data.title || 
+    const title =
+      data.trackName ||
+      data.track_name ||
+      data.title ||
       metadata.title;
 
     // Handle different field name possibilities for album
-    const album = 
-      data.albumName || 
-      data.album_name || 
-      data.album || 
-      metadata.album || 
+    const album =
+      data.albumName ||
+      data.album_name ||
+      data.album ||
+      metadata.album ||
       '';
 
     // Handle different field name possibilities for lyrics
-    const syncedLyrics = 
-      data.syncedLyrics || 
-      data.synced_lyrics || 
-      data.lrc || 
+    const syncedLyrics =
+      data.syncedLyrics ||
+      data.synced_lyrics ||
+      data.lrc ||
       null;
 
-    const plainLyrics = 
-      data.plainLyrics || 
-      data.plain_lyrics || 
-      data.text || 
+    const plainLyrics =
+      data.plainLyrics ||
+      data.plain_lyrics ||
+      data.text ||
       null;
 
     // Check if we have any lyrics at all
